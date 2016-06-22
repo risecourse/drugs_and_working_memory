@@ -16,29 +16,31 @@ import ipdb
 '''Parameters ###############################################'''
 #simulation parameters
 filename='wm_2'
-n_trials=2
+n_trials=200
 dt=0.001 #timestep
 dt_sample=0.05 #probe sample_every
 t_stim=1.0 #duration of cue presentation
 t_delay=8.0 #duration of delay period between cue and decision
 decision_type='addition' #which decision procedure to use
-drug_type='additive_noise'
-drugs=['control']#,'PHE','GFC']
-drugs_effect={'control':0.00,'PHE':-0.6,'GFC':0.2} #for additive_noise, [gfc_mean, phe_mean];
+drug_type='additive_noise' #how to simulate the drugs: 'additive-noise','alpha','multiply','NEURON'
+drugs=['control','PHE','GFC']
+drugs_effect={'control':0.00,'PHE':-0.4,'GFC':0.4} #for additive_noise, [gfc_mean, phe_mean];
 ramp_scale=0.42 #how fast does the 'time' dimension accumulate in WM neurons
 stim_scale=1.0 #how strong is the stimulus from the visual system
-enc_min_cutoff=0.0
-enc_max_cutoff=0.7
-sigma_smoothing=0.005
-cues=2*np.random.randint(2,size=n_trials)-1 #whether the cues is on the left or right
+enc_min_cutoff=0.333 #minimum cutoff for "weak" encoders in preferred directions
+enc_max_cutoff=0.666 #maximum cutoff for "weak" encoders in preferred directions
+sigma_smoothing=0.005 #gaussian smoothing applied to spike data to calculate firing rate
+record_spikes=True #should the simulation record and plot firing rates of neurons in WM?
+record_spike_fraction=0.005 #number of neurons in WM to add to dataframe and plot
 misperceive=0.1 #chance of failing to perceive the cue, causing no info to go into WM
 perceived=np.ones(n_trials)
+cues=2*np.random.randint(2,size=n_trials)-1 #whether the cues is on the left or right
 for n in range(len(perceived)):
 	if np.random.rand()<misperceive: perceived[n]=0
 
 #ensemble parameters
 neurons_sensory=100 #neurons for the sensory ensemble
-neurons_wm=200
+neurons_wm=1000
 neurons_decide=100
 tau_stim=None #synaptic time constant of stimuli to populations
 tau=0.01 #synaptic time constant between ensembles
@@ -62,9 +64,11 @@ params={
 	'stim_scale':stim_scale,
 	'enc_min_cutoff':enc_min_cutoff,
 	'enc_max_cutoff':enc_max_cutoff,
-	# 'cues':cues,
+	'sigma_smoothing':sigma_smoothing,
+	'record_spikes':record_spikes,
 	'misperceive':misperceive,
-	'perceived':perceived,
+	# 'cues':cues,
+	# 'perceived':perceived,
 
 	'neurons_sensory':neurons_sensory,
 	'neurons_wm':neurons_wm,
@@ -126,7 +130,7 @@ def update_spike_dataframe(j,n):
 	t_h = np.arange(t_width / dt) * dt - t_width / 2.0
 	h = np.exp(-t_h ** 2 / (2 * sigma_smoothing ** 2))
 	h = h / np.linalg.norm(h, 1)
-	for f in range(neurons_wm):
+	for f in range(int(neurons_wm*record_spike_fraction)):
 		enc = sim.data[wm].encoders[f]
 		tuning = get_tuning(cues[n],enc)		
 		firing_rate = np.convolve(sim.data[probe_spikes][:,f],h,mode='same')
@@ -134,7 +138,7 @@ def update_spike_dataframe(j,n):
 			rt=t*dt_sample
 			spike_dataframe.loc[j]=[rt,drug,f+n*neurons_wm,tuning,firing_rate[t]]
 			j+=1
-		print 'neuron %s' %f
+		# print 'neuron %s' %f
 	return j
 
 def get_correct(cue,output_val):
@@ -209,7 +213,7 @@ for drug in drugs:
 		sim=nengo.Simulator(model,dt=dt)
 		sim.run(t_stim+t_delay)
 		i=update_dataframe(i)
-		j=update_spike_dataframe(j,n)
+		if record_spikes == True: j=update_spike_dataframe(j,n)
 
 #create Pandas dataframe for model data
 emp_columns=('time','drug','accuracy','trial')
@@ -252,15 +256,16 @@ ax2.set(xlabel='time (s)',xlim=(2.0,8.0),ylabel='accuracy')
 figure.savefig(fname+'_plots.png')
 plt.show()
 
-sns.set(context='poster')
-figure2, (ax3, ax4) = plt.subplots(1, 2)
-sns.tsplot(time="time",value="firing_rate",data=spike_dataframe.query("tuning=='weak'"),
-			unit="neuron-trial",condition='drug',ax=ax3,ci=95)
-sns.tsplot(time="time",value="firing_rate",data=spike_dataframe.query("tuning=='nonpreferred'"),
-			unit="neuron-trial",condition='drug',ax=ax4,ci=95)
-ax3.set(xlabel='time (s)',xlim=(0.0,8.0),ylabel='Normalized Firing Rate',title='Preferred Direction')
-ax4.set(xlabel='time (s)',xlim=(0.0,8.0),ylabel='',title='Nonpreferred Direction')
-figure2.savefig(fname+'_firing_rate_plots.png')
-plt.show()
+if record_spikes == True:
+	sns.set(context='poster')
+	figure2, (ax3, ax4) = plt.subplots(1, 2)
+	sns.tsplot(time="time",value="firing_rate",data=spike_dataframe.query("tuning=='weak'"),
+				unit="neuron-trial",condition='drug',ax=ax3,ci=95)
+	sns.tsplot(time="time",value="firing_rate",data=spike_dataframe.query("tuning=='nonpreferred'"),
+				unit="neuron-trial",condition='drug',ax=ax4,ci=95)
+	ax3.set(xlabel='time (s)',xlim=(0.0,8.0),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
+	ax4.set(xlabel='time (s)',xlim=(0.0,8.0),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
+	figure2.savefig(fname+'_firing_rate_plots.png')
+	plt.show()
 
 os.chdir(root)
