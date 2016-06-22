@@ -15,17 +15,18 @@ import ipdb
 
 '''Parameters ###############################################'''
 #simulation parameters
-filename='wm_3'
-n_trials=50
+filename='wm_4'
+n_trials=10
 dt=0.001 #timestep
 dt_sample=0.05 #probe sample_every
 t_stim=1.0 #duration of cue presentation
 t_delay=8.0 #duration of delay period between cue and decision
 
-decision_type='BG' #which decision procedure to use" 'addition' for noisy choise, 'BG' basal ganglia
-drug_type='multiply' #how to simulate the drugs: 'addition','multiply',alpha','NEURON'
+decision_type='BG' #which decision procedure to use: 'choice' for noisy choice, 'BG' basal ganglia
+drug_type='alpha' #how to simulate the drugs: 'addition','multiply',alpha','NEURON'
 drugs=['control','PHE','GFC'] #list of drugs to simulate
-drugs_effect={'control':0.00,'PHE':-0.15,'GFC':0.4} #for addition, [gfc_mean, phe_mean];
+drugs_effect={'control':0.00,'PHE':-0.4,'GFC':0.4} #mean of injected stimulus onto wm.neurons
+drugs_effect_2={'control':[1.0,1,0],'PHE':[0.5,1.0],'GFC':[2.0,1.0]} #multiplier for alpha/bias in wm
 ramp_scale=0.42 #how fast does the 'time' dimension accumulate in WM neurons, default=0.42
 BG_delta_ramp=-0.10 #change in ramp_scale when using BG decision procedure, default=-0.1+/-0.01
 stim_scale=1.0 #how strong is the stimulus from the visual system
@@ -117,7 +118,7 @@ def wm_recurrent_function(x):
 
 def decision_function(x):
 	output=0.0
-	if decision_type=='addition':
+	if decision_type=='choice':
 		value=x[0]+x[1]
 		if value > 0.0: output = 1.0
 		elif value < 0.0: output = -1.0
@@ -127,6 +128,10 @@ def decision_function(x):
 		if x[0] > x[1]: output = 1.0
 		elif x[0] < x[1]: output = -1.0
 	return output 
+
+def reset_alpha_bias():
+	wm.gain = sim.data[wm].gain * drugs_effect_2[drug][0]
+	wm.bias = sim.data[wm].bias * drugs_effect_2[drug][1]
 
 def update_dataframe(i):
 	for t in timesteps:
@@ -183,7 +188,7 @@ with model:
 	#Working Memory
 	wm = nengo.Ensemble(neurons_wm,2)
 	#Decision
-	if decision_type=='addition':
+	if decision_type=='choice':
 		decision = nengo.Ensemble(neurons_decide,2)
 		noise_decision_node = nengo.Node(output=noise_decision_function)	
 	elif decision_type=='BG':
@@ -202,7 +207,7 @@ with model:
 	nengo.Connection(sensory,wm,synapse=tau_wm,transform=tau_wm)
 	nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
 	nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)
-	if decision_type=='addition':	
+	if decision_type=='choice':	
 		nengo.Connection(wm[0],decision[0],synapse=tau) #no ramp information passed
 		nengo.Connection(noise_decision_node,decision[1],synapse=None)
 		nengo.Connection(decision,output,function=decision_function)
@@ -240,6 +245,7 @@ for drug in drugs:
     for n in trials:
 		print 'Running drug \"%s\", trial %s...' %(drug,n+1)
 		sim=nengo.Simulator(model,dt=dt)
+		if drug_type == 'alpha': reset_alpha_bias()
 		sim.run(t_stim+t_delay)
 		i=update_dataframe(i)
 		if record_spikes == True: j=update_spike_dataframe(j,n)
@@ -292,8 +298,8 @@ if record_spikes == True:
 				unit="neuron-trial",condition='drug',ax=ax3,ci=95)
 	sns.tsplot(time="time",value="firing_rate",data=spike_dataframe.query("tuning=='nonpreferred'"),
 				unit="neuron-trial",condition='drug',ax=ax4,ci=95)
-	ax3.set(xlabel='time (s)',xlim=(0.0,8.0),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
-	ax4.set(xlabel='time (s)',xlim=(0.0,8.0),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
+	ax3.set(xlabel='time (s)',xlim=(0.0,8.0),ylim=(0,500),ylabel='Normalized Firing Rate',title='Preferred Direction')
+	ax4.set(xlabel='time (s)',xlim=(0.0,8.0),ylim=(0,500),ylabel='',title='Nonpreferred Direction')
 	figure2.savefig(fname+'_firing_rate_plots.png')
 	plt.show()
 
