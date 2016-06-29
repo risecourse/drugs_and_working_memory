@@ -7,6 +7,9 @@ import nengo
 from nengo.dists import Choice,Exponential,Uniform
 from nengo.utils.matplotlib import rasterplot
 from nengo.rc import rc
+import nengo_detailed_neurons
+from nengo_detailed_neurons.neurons import Bahr2, IntFire1
+from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
 import nengo_gui
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,7 +24,7 @@ rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
 '''Parameters ###############################################'''
 #simulation parameters
 filename='wm_4'
-n_trials=500
+n_trials=1
 dt=0.001 #timestep
 dt_sample=0.05 #probe sample_every
 t_stim=1.0 #duration of cue presentation
@@ -29,11 +32,12 @@ t_delay=8.0 #duration of delay period between cue and decision
 seed=3 #for the simulator build process, sets tuning curves equal to control before drug application
 
 decision_type='BG' #which decision procedure to use: 'choice' for noisy choice, 'BG' basal ganglia
-drug_type='alpha' #how to simulate the drugs: 'addition','multiply',alpha','NEURON',
-drugs=['control','PHE','GFC'] #list of drugs to simulate; 'no_ramp' (comparison with control)
+drug_type='NEURON' #how to simulate the drugs: 'addition','multiply',alpha','NEURON',
+drugs=['control']#['control','PHE','GFC'] #list of drugs to simulate; 'no_ramp' (comparison with control)
 drug_effect_stim={'control':0.0,'PHE':-0.3,'GFC':0.5,'no_ramp':0.0} #mean of injected stimulus onto wm.neurons
 drug_effect_multiply={'control':0.0,'PHE':-0.025,'GFC':0.025} #mean of injected stimulus onto wm.neurons
 drug_effect_gain={'control':[1.0,1,0],'PHE':[0.99,1.02],'GFC':[1.05,0.95]} #multiplier for alpha/bias in wm
+drug_effect_channel={'control':1.0,'PHE':0.99,'GFC':1.01} #multiplier for channel conductances in NEURON cells
 ramp_scale=0.42 #how fast does the 'time' dimension accumulate in WM neurons, default=0.42
 BG_delta_ramp=-0.09 #change in ramp_scale when using BG decision procedure, default=-0.1+/-0.01
 BG_delta_PHE=0.0 #TODO
@@ -55,7 +59,7 @@ plot_context='poster' #seaborn plot context
 
 #ensemble parameters
 neurons_sensory=100 #neurons for the sensory ensemble
-neurons_wm=1000 #neurons for workimg memory ensemble
+neurons_wm=100 #neurons for workimg memory ensemble
 neurons_decide=100 #neurons for decision or basal ganglia
 tau_stim=None #synaptic time constant of stimuli to populations
 tau=0.01 #synaptic time constant between ensembles
@@ -179,6 +183,14 @@ def reset_alpha_bias(model,sim,wm_recurrent,wm_choice,wm_BG):
 		plt.show()
 	return sim
 
+def reset_channels():
+	for c in nengo_detailed_neurons.builder.ens_to_cells[wm]:
+	    c.neuron.soma.gbar_nat *= drug_effect_channel[drug]
+	    c.neuron.hillock.gbar_nat *= drug_effect_channel[drug]
+	    c.neuron.tuft.gbar_nat *= drug_effect_channel[drug]
+	    c.neuron.iseg.gbar_nat *= drug_effect_channel[drug]
+	    c.neuron.recalculate_channel_densities()
+
 def update_dataframe(i):
 	for t in timesteps:
 		wm_val=np.abs(sim.data[probe_wm][t][0])
@@ -268,7 +280,10 @@ for drug in drugs:
 			sensory = nengo.Ensemble(neurons_sensory,2)
 			noise_wm_node = nengo.Node(output=noise_bias_function)
 			#Working Memory
-			wm = nengo.Ensemble(neurons_wm,2,label='wm')
+			if drug_type == 'NEURON':
+				wm = nengo.Ensemble(neurons_wm,2,neuron_type=Bahr2(),label='wm')
+			else:
+				wm = nengo.Ensemble(neurons_wm,2,label='wm')
 			#Decision
 			if decision_type=='choice':
 				decision = nengo.Ensemble(neurons_decide,2)
@@ -286,9 +301,15 @@ for drug in drugs:
 			#Connections
 			nengo.Connection(stim,sensory[0],synapse=tau_stim)
 			nengo.Connection(ramp,sensory[1],synapse=tau_stim)
-			nengo.Connection(sensory,wm,synapse=tau_wm,transform=tau_wm)
-			wm_recurrent=nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
-			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)
+			if drug_type == 'NEURON':
+				solver = nengo.solvers.LstsqL2(True)
+				nengo.Connection(sensory,wm,synapse=ExpSyn(tau_wm),transform=tau_wm,solver=solver)
+				wm_recurrent=nengo.Connection(wm,wm,synapse=ExpSyn(tau_wm),function=wm_recurrent_function,solver=solver)	
+				nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)							
+			else:
+				nengo.Connection(sensory,wm,synapse=tau_wm,transform=tau_wm)
+				wm_recurrent=nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
+				nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)
 			wm_choice,wm_BG=None,None
 			if decision_type=='choice':	
 				wm_choice=nengo.Connection(wm[0],decision[0],synapse=tau) #no ramp information passed
@@ -314,6 +335,7 @@ for drug in drugs:
 		print 'Running drug \"%s\", trial %s...' %(drug,n+1)
 		with nengo.Simulator(model,dt=dt) as sim:
 			if drug_type == 'alpha': sim=reset_alpha_bias(model,sim,wm_recurrent,wm_choice,wm_BG)
+			if drug_type == 'NEURON': reset_channels()
 			sim.run(t_stim+t_delay)
 			i=update_dataframe(i)
 			if plot_firing_rate == True: j=update_firing_rate_dataframe(j,n)
@@ -330,7 +352,7 @@ fname=filename+addon
 
 print 'Exporting Data...'
 dataframe.to_pickle(fname+'_data.pkl')
-# firing_rate_dataframe.to_pickle(fname+'_firing_rate_data.pkl')
+firing_rate_dataframe.to_pickle(fname+'_firing_rate_data.pkl')
 param_df=pd.DataFrame([params])
 param_df.reset_index().to_json(fname+'_params.json',orient='records')
 
