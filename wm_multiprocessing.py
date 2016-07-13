@@ -27,13 +27,13 @@ rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
 '''Parameters ###############################################'''
 #simulation parameters
 seed=3 #for the simulator build process, sets tuning curves equal to control before drug application
-n_trials=100
+n_trials=10
 n_processes=n_trials
 filename='wm_mp'
 dt=0.001 #timestep
 dt_sample=0.05 #probe sample_every
 t_stim=1.0 #duration of cue presentation
-t_delay=3.0 #duration of delay period between cue and decision
+t_delay=16.0 #duration of delay period between cue and decision
 timesteps=np.arange(0,int((t_stim+t_delay)/dt_sample))
 trials=np.arange(n_trials)
 
@@ -44,8 +44,8 @@ drug_effect_stim={'control':0.0,'PHE':-0.3,'GFC':0.5,'no_ramp':0.0} #mean of inj
 drug_effect_multiply={'control':0.0,'PHE':-0.025,'GFC':0.025} #mean of injected stimulus onto wm.neurons
 drug_effect_gain={'control':[1.0,1,0],'PHE':[0.99,1.02],'GFC':[1.05,0.95]} #multiplier for alpha/bias in wm
 drug_effect_channel={'control':200.0,'PHE':230,'GFC':160} #multiplier for channel conductances in NEURON cells
-k_neuron_sensory=2.2
-k_neuron_recur=2.2
+k_neuron_sensory=1.0
+k_neuron_recur=1.0
 delta_rate=0.00 #increase the maximum firing rate of wm neurons for NEURON
 
 enc_min_cutoff=0.3 #minimum cutoff for "weak" encoders in preferred directions
@@ -135,8 +135,10 @@ def my_simulator(params):
 
 	def ramp_function(t):
 		if drug=='no_ramp': return 0
+		elif drug_type == 'NEURON' and drug_type == 'NEURON':
+			return ramp_scale * k_neuron_sensory
 		elif t > t_stim:
-			return ramp_scale + k_neuron_sensory * (drug_type == 'NEURON')
+			return ramp_scale
 		else: return 0
 
 	def noise_bias_function(t):
@@ -342,7 +344,7 @@ for drug in drugs:
 df_list = pool.map(my_simulator, exp_params)
 primary_dataframe = pd.concat([df_list[i][0] for i in range(len(df_list))], ignore_index=True)
 firing_dataframe = pd.concat([df_list[i][1] for i in range(len(df_list))], ignore_index=True)
-print primary_dataframe, firing_dataframe
+# print primary_dataframe, firing_dataframe
 
 
 
