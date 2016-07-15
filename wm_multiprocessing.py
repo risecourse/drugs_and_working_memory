@@ -27,20 +27,20 @@ rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
 '''Parameters ###############################################'''
 #simulation parameters
 seed=3 #for the simulator build process, sets tuning curves equal to control before drug application
-n_trials=10
-n_processes=n_trials
+n_trials=500
+n_processes=10 #3*n_trials
 filename='wm_mp'
 dt=0.001 #timestep
 dt_sample=0.05 #probe sample_every
 t_stim=1.0 #duration of cue presentation
-t_delay=16.0 #duration of delay period between cue and decision
+t_delay=8.0 #duration of delay period between cue and decision
 timesteps=np.arange(0,int((t_stim+t_delay)/dt_sample))
 trials=np.arange(n_trials)
 
 decision_type='choice' #which decision procedure to use: 'choice' for noisy choice, 'BG' basal ganglia
-drug_type='NEURON' #how to simulate the drugs: 'addition','multiply',alpha','NEURON',
-drugs=['control']#['control','PHE','GFC'] #list of drugs to simulate; 'no_ramp' (comparison with control)
-drug_effect_stim={'control':0.0,'PHE':-0.3,'GFC':0.5,'no_ramp':0.0} #mean of injected stimulus onto wm.neurons
+drug_type='addition' #how to simulate the drugs: 'addition','multiply',alpha','NEURON',
+drugs=['control','PHE','GFC'] #list of drugs to simulate; 'no_ramp' (comparison with control)
+drug_effect_stim={'control':0.0,'PHE':-0.3,'GFC':0.5} #mean of injected stimulus onto wm.neurons
 drug_effect_multiply={'control':0.0,'PHE':-0.025,'GFC':0.025} #mean of injected stimulus onto wm.neurons
 drug_effect_gain={'control':[1.0,1,0],'PHE':[0.99,1.02],'GFC':[1.05,0.95]} #multiplier for alpha/bias in wm
 drug_effect_channel={'control':200.0,'PHE':230,'GFC':160} #multiplier for channel conductances in NEURON cells
@@ -51,12 +51,12 @@ delta_rate=0.00 #increase the maximum firing rate of wm neurons for NEURON
 enc_min_cutoff=0.3 #minimum cutoff for "weak" encoders in preferred directions
 enc_max_cutoff=0.6 #maximum cutoff for "weak" encoders in preferred directions
 sigma_smoothing=0.005 #gaussian smoothing applied to spike data to calculate firing rate
-frac=0.05 #fraction of neurons in WM to add to dataframe and plot
+frac=0.1 #fraction of neurons in WM to add to dataframe and plot
 
-neurons_sensory=200 #neurons for the sensory ensemble
+neurons_sensory=100 #neurons for the sensory ensemble
 neurons_wm=100 #neurons for workimg memory ensemble
 neurons_decide=100 #neurons for decision or basal ganglia
-ramp_scale=0.42 #how fast does the 'time' dimension accumulate in WM neurons, default=0.42
+ramp_scale=0.45 #how fast does the 'time' dimension accumulate in WM neurons, default=0.42
 stim_scale=1.0 #how strong is the stimulus from the visual system
 tau_stim=None #synaptic time constant of stimuli to populations
 tau=0.01 #synaptic time constant between ensembles
@@ -134,8 +134,7 @@ def my_simulator(params):
 		else: return 0
 
 	def ramp_function(t):
-		if drug=='no_ramp': return 0
-		elif drug_type == 'NEURON' and drug_type == 'NEURON':
+		if drug_type == 'NEURON':
 			return ramp_scale * k_neuron_sensory
 		elif t > t_stim:
 			return ramp_scale
@@ -386,11 +385,11 @@ sns.tsplot(time="time",value="wm",data=primary_dataframe,unit="trial",condition=
 sns.tsplot(time="time",value="correct",data=primary_dataframe,unit="trial",condition='drug',ax=ax2,ci=95)
 sns.tsplot(time="time",value="accuracy",data=empirical_dataframe,unit='trial',condition='drug',
 			interpolate=False,ax=ax2)
-ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,10),
+ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,10),ylim=(0,1),
 			title="drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials))
-ax2.set(xlabel='time (s)',xlim=(0,10),ylabel='accuracy')
+ax2.set(xlabel='time (s)',xlim=(0,10),ylim=(0,1),ylabel='accuracy')
 figure.savefig(fname+'_primary_plots.png')
-plt.show()
+# plt.show()
 
 sns.set(context=plot_context)
 figure2, (ax3, ax4) = plt.subplots(1, 2)
