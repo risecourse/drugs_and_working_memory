@@ -139,7 +139,6 @@ def reset_alpha_bias(model,sim,wm_recurrent,wm_choice,wm_BG,drug):
 	if wm_choice is not None:
 		wm_choice.solver = MySolver(sim.model.params[wm_choice].weights)
 	if wm_BG is not None:
-		#weights[0]=weights[1] for connection from wm to utilities (EnsembleArray.input with n_ens=2)
 		wm_BG.solver = MySolver(sim.model.params[wm_BG].weights[0]) 
 	#rebuild the network to affect the gain/bias change	
 	sim=nengo.Simulator(model,dt=dt)

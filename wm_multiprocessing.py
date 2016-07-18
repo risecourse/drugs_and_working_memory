@@ -7,9 +7,9 @@ def run(params):
 	import nengo
 	from nengo.dists import Choice,Exponential,Uniform
 	from nengo.rc import rc
-	# import nengo_detailed_neurons
-	# from nengo_detailed_neurons.neurons import Bahr2, IntFire1
-	# from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
+	import nengo_detailed_neurons
+	from nengo_detailed_neurons.neurons import Bahr2, IntFire1
+	from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
 	import numpy as np
 	import pandas as pd
 
@@ -282,6 +282,10 @@ def generate_cues(misperceive,n_trials,seed=3):
 		if rng.rand()<misperceive: perceived[n]=0
 	return cues,perceived,trials
 
+
+
+
+'''Main ###############################################################'''
 def main():
 	import matplotlib.pyplot as plt
 	import seaborn as sns
@@ -294,13 +298,12 @@ def main():
 	'''Import Parameters from File'''
 	all_params=import_params('parameters.txt')
 	seed=all_params['seed']
-	n_trials=all_params['seed']
-	n_processes=all_params['seed'] #3*n_trials
-	filename=str(all_params['seed'])
+	n_trials=all_params['n_trials']
+	n_processes=all_params['n_processes'] #3*n_trials
+	filename=str(all_params['filename'])
 	drug_type=str(all_params['drug_type'])
 	decision_type=str(all_params['decision_type'])
 	drugs=all_params['drugs']
-	n_trials=all_params['n_trials']
 	cues,perceived,trials=generate_cues(all_params['misperceive'],n_trials,seed)
 	all_params['cues']=cues
 	all_params['perceived']=perceived
@@ -321,7 +324,7 @@ def main():
 	'''Plot and Export ###############################################'''
 	print 'Exporting Data...'
 	root=os.getcwd()
-	empirical_dataframe=pd.read_pickle('empirical_data.pkl')
+	empirical_dataframe=pd.read_pickle('empirical_data') #add '.pkl' onto filename for windows
 	os.chdir(root+'/data/')
 	addon=str(id_generator(9))
 	fname=filename+'_'+decision_type+'_'+drug_type+'_'+addon
@@ -338,9 +341,9 @@ def main():
 	sns.tsplot(time="time",value="correct",data=primary_dataframe,unit="trial",condition='drug',ax=ax2,ci=95)
 	sns.tsplot(time="time",value="accuracy",data=empirical_dataframe,unit='trial',condition='drug',
 				interpolate=False,ax=ax2)
-	ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,10),ylim=(0,1),
+	ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,9.5),ylim=(0,1),
 				title="drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials))
-	ax2.set(xlabel='time (s)',xlim=(0,10),ylim=(0,1),ylabel='accuracy')
+	ax2.set(xlabel='time (s)',xlim=(0,9.5),ylim=(0.5,1),ylabel='accuracy')
 	figure.savefig(fname+'_primary_plots.png')
 	# plt.show()
 
@@ -352,8 +355,8 @@ def main():
 	if len(firing_dataframe.query("tuning=='nonpreferred'"))>0:
 		sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax4,ci=95,
 				data=firing_dataframe.query("tuning=='nonpreferred'").reset_index())
-	ax3.set(xlabel='time (s)',xlim=(0.0,10.0),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
-	ax4.set(xlabel='time (s)',xlim=(0.0,10.0),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
+	ax3.set(xlabel='time (s)',xlim=(0.0,9.5),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
+	ax4.set(xlabel='time (s)',xlim=(0.0,9.5),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
 	figure2.savefig(fname+'_firing_plots.png')
 	plt.show()
 
