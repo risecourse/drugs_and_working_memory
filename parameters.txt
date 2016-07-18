@@ -1,0 +1,39 @@
+{
+'seed':3, #for the simulator build process, sets tuning curves equal to control before drug application
+'n_trials':100,
+'n_processes':6, #3*n_trials
+'decision_type':'choice', #decision procedure: 'choice', 'BG'
+'drug_type':'addition', #how to simulate the drugs: 'addition','multiply',alpha','NEURON',
+
+'filename':'wm_mp',
+'dt':0.001, #timestep
+'dt_sample':0.05, #probe sample_every
+'t_stim':1.0, #duration of cue presentation
+'t_delay':8.0, #duration of delay period between cue and decision
+				
+'drugs':['control','PHE','GFC'], #names of the of drugs to simulate, see dicts below
+'drug_effect_stim':{'control':0.0,'PHE':-0.3,'GFC':0.5}, #mean of stim onto wm.neurons
+'drug_effect_multiply':{'control':0.0,'PHE':-0.025,'GFC':0.025}, #recurrent transform multiplier on wm
+'drug_effect_gain':{'control':[1.0,1,0],'PHE':[0.99,1.02],'GFC':[1.05,0.95]}, #alpha/bias multiplier for wm neurons
+'drug_effect_channel':{'control':200.0,'PHE':230,'GFC':160}, #channel conductances multiplier in NEURON cells
+'k_neuron_sensory':1.0,
+'k_neuron_recur':1.0,
+
+'enc_min_cutoff':0.3, #minimum cutoff for "weak" encoders in preferred directions
+'enc_max_cutoff':0.6, #maximum cutoff for "weak" encoders in preferred directions
+'sigma_smoothing':0.005, #gaussian smoothing applied to spike data to calculate firing rate
+'frac':0.1, #fraction of neurons in WM to add to dataframe and plot
+
+'neurons_sensory':100, #neurons for the sensory ensemble
+'neurons_wm':100, #neurons for workimg memory ensemble
+'neurons_decide':100, #neurons for decision or basal ganglia
+'ramp_scale':0.45, #how fast does the 'time' dimension accumulate in WM neurons
+'stim_scale':1.0, #how strong is the stimulus from the visual system
+'tau':0.01, #synaptic time constant between ensembles
+'tau_wm':0.1, #synapse on recurrent connection in wm
+'noise_wm':0.005, #standard deviation of full-spectrum white noise injected into wm.neurons
+'noise_decision':0.3, #for addition, std of added gaussian noise; 
+
+'misperceive':0.1 ,#chance of failing to perceive the cue, causing no info to go into WM
+'plot_context':'poster', #seaborn plot context
+}

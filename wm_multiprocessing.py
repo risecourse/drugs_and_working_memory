@@ -3,120 +3,52 @@
 # June-August 2016
 # Modeling the effects of drugs on working memory
 
-import nengo
-from nengo.dists import Choice,Exponential,Uniform
-from nengo.utils.matplotlib import rasterplot
-from nengo.rc import rc
-import nengo_detailed_neurons
-from nengo_detailed_neurons.neurons import Bahr2, IntFire1
-from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
-import nengo_gui
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import os
-import string
-import random
-from pathos.multiprocessing import ProcessingPool as Pool
-import ipdb
-rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
+def run(params):
+	import nengo
+	from nengo.dists import Choice,Exponential,Uniform
+	from nengo.rc import rc
+	# import nengo_detailed_neurons
+	# from nengo_detailed_neurons.neurons import Bahr2, IntFire1
+	# from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
+	import numpy as np
+	import pandas as pd
 
+	decision_type=params[0]
+	drug_type=params[1]
+	drug = params[2]
+	trial = params[3]
+	seed = params[4]
+	my_params = params[5]
 
-
-'''Parameters ###############################################'''
-#simulation parameters
-seed=3 #for the simulator build process, sets tuning curves equal to control before drug application
-n_trials=500
-n_processes=10 #3*n_trials
-filename='wm_mp'
-dt=0.001 #timestep
-dt_sample=0.05 #probe sample_every
-t_stim=1.0 #duration of cue presentation
-t_delay=8.0 #duration of delay period between cue and decision
-timesteps=np.arange(0,int((t_stim+t_delay)/dt_sample))
-trials=np.arange(n_trials)
-
-decision_type='choice' #which decision procedure to use: 'choice' for noisy choice, 'BG' basal ganglia
-drug_type='addition' #how to simulate the drugs: 'addition','multiply',alpha','NEURON',
-drugs=['control','PHE','GFC'] #list of drugs to simulate; 'no_ramp' (comparison with control)
-drug_effect_stim={'control':0.0,'PHE':-0.3,'GFC':0.5} #mean of injected stimulus onto wm.neurons
-drug_effect_multiply={'control':0.0,'PHE':-0.025,'GFC':0.025} #mean of injected stimulus onto wm.neurons
-drug_effect_gain={'control':[1.0,1,0],'PHE':[0.99,1.02],'GFC':[1.05,0.95]} #multiplier for alpha/bias in wm
-drug_effect_channel={'control':200.0,'PHE':230,'GFC':160} #multiplier for channel conductances in NEURON cells
-k_neuron_sensory=1.0
-k_neuron_recur=1.0
-delta_rate=0.00 #increase the maximum firing rate of wm neurons for NEURON
-
-enc_min_cutoff=0.3 #minimum cutoff for "weak" encoders in preferred directions
-enc_max_cutoff=0.6 #maximum cutoff for "weak" encoders in preferred directions
-sigma_smoothing=0.005 #gaussian smoothing applied to spike data to calculate firing rate
-frac=0.1 #fraction of neurons in WM to add to dataframe and plot
-
-neurons_sensory=100 #neurons for the sensory ensemble
-neurons_wm=100 #neurons for workimg memory ensemble
-neurons_decide=100 #neurons for decision or basal ganglia
-ramp_scale=0.45 #how fast does the 'time' dimension accumulate in WM neurons, default=0.42
-stim_scale=1.0 #how strong is the stimulus from the visual system
-tau_stim=None #synaptic time constant of stimuli to populations
-tau=0.01 #synaptic time constant between ensembles
-tau_wm=0.1 #synapse on recurrent connection in wm
-noise_wm=0.005 #standard deviation of full-spectrum white noise injected into wm.neurons
-noise_decision=0.3 #for addition, std of added gaussian noise; 
-wm_decay=1.0 #recurrent transform in wm ensemble: set <1.0 for decay
-
-misperceive=0.1 #chance of failing to perceive the cue, causing no info to go into WM
-perceived=np.ones(n_trials) #list of correctly percieved (not necessarily remembered) cues
-cues=2*np.random.randint(2,size=n_trials)-1 #whether the cues is on the left or right
-for n in range(len(perceived)): 
-	if np.random.rand()<misperceive: perceived[n]=0
-plot_context='poster' #seaborn plot context
-
-params={
-	'seed':seed,
-	'n_processes':n_processes,
-	'n_trials':n_trials,
-	'filename':filename,
-	'dt':dt,
-	'dt_sample':dt_sample,
-	't_stim':t_stim,
-	't_delay':t_delay,
-
-	'decision_type':decision_type,
-	'drug_type':drug_type,
-	'drugs':drugs,
-	'drug_effect_stim':drug_effect_stim,
-	'drug_effect_multiply':drug_effect_multiply,
-	'drug_effect_gain':drug_effect_gain,
-	'ramp_scale':ramp_scale,
-	'stim_scale':stim_scale,
-	'k_neuron_sensory':k_neuron_sensory,
-	'k_neuron_recur':k_neuron_recur,
-	'delta_rate':delta_rate,
-
-	'enc_min_cutoff':enc_min_cutoff,
-	'enc_max_cutoff':enc_max_cutoff,
-	'sigma_smoothing':sigma_smoothing,
-	'frac':frac,
-	'misperceive':misperceive,
-	# 'cues':cues,
-	# 'perceived':perceived,
-
-	'neurons_sensory':neurons_sensory,
-	'neurons_wm':neurons_wm,
-	'neurons_decide':neurons_decide,
-	'tau_stim':tau_stim,
-	'tau':tau,
-	'tau_wm':tau_wm,
-	'noise_wm':noise_wm,
-	'noise_decision':noise_decision,
-	'wm_decay':wm_decay,
-}
-
-def my_simulator(params):
-	decision_type, drug_type, drug, trial = params[0], params[1], params[2], params[3]
+	dt=my_params['dt']
+	dt_sample=my_params['dt_sample']
+	t_stim=my_params['t_stim']
+	t_delay=my_params['t_delay']
+	drug_effect_stim=my_params['drug_effect_stim']
+	drug_effect_multiply=my_params['drug_effect_multiply']
+	drug_effect_gain=my_params['drug_effect_gain']
+	drug_effect_channel=my_params['drug_effect_channel']
+	k_neuron_sensory=my_params['k_neuron_sensory']
+	k_neuron_recur=my_params['k_neuron_recur']
+	enc_min_cutoff=my_params['enc_min_cutoff']
+	enc_max_cutoff=my_params['enc_max_cutoff']
+	sigma_smoothing=my_params['sigma_smoothing']
+	frac=my_params['frac']
+	neurons_sensory=my_params['neurons_sensory']
+	neurons_wm=my_params['neurons_wm']
+	neurons_decide=my_params['neurons_decide']
+	ramp_scale=my_params['ramp_scale']
+	stim_scale=my_params['stim_scale']
+	tau=my_params['tau']
+	tau_wm=my_params['tau_wm']
+	noise_wm=my_params['noise_wm']
+	noise_decision=my_params['noise_decision']
+	perceived=my_params['perceived']
+	cues=my_params['cues']
+	timesteps=np.arange(0,int((t_stim+t_delay)/dt_sample))
 
 	'''helper functions ###############################################'''
+	rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
 
 	class MySolver(nengo.solvers.Solver):
 		#When the simulator builds the network, it looks for a solver to calculate the decoders
@@ -160,11 +92,11 @@ def my_simulator(params):
 
 	def wm_recurrent_function(x):
 		if drug_type == 'multiply':
-			return x * (wm_decay + drug_effect_multiply[drug])
+			return x * drug_effect_multiply[drug]
 		elif drug_type=='NEURON':
-			return x * wm_decay * k_neuron_recur
+			return x * k_neuron_recur
 		else:
-			return x * wm_decay
+			return x
 
 	def decision_function(x):
 		output=0.0
@@ -269,7 +201,7 @@ def my_simulator(params):
 		noise_decision_node = nengo.Node(output=noise_decision_function)
 		#Working Memory
 		if drug_type == 'NEURON':
-			wm = nengo.Ensemble(neurons_wm,2,neuron_type=Bahr2(),max_rates=Uniform(200+delta_rate,400+delta_rate))
+			wm = nengo.Ensemble(neurons_wm,2,neuron_type=Bahr2())
 		else:
 			wm = nengo.Ensemble(neurons_wm,2)
 		#Decision
@@ -286,8 +218,8 @@ def my_simulator(params):
 		output = nengo.Ensemble(neurons_decide,1)
 
 		#Connections
-		nengo.Connection(stim,sensory[0],synapse=tau_stim)
-		nengo.Connection(ramp,sensory[1],synapse=tau_stim)
+		nengo.Connection(stim,sensory[0],synapse=None)
+		nengo.Connection(ramp,sensory[1],synapse=None)
 		if drug_type == 'NEURON':
 			solver_stim = nengo.solvers.LstsqL2(True)
 			solver_wm = nengo.solvers.LstsqL2(True)
@@ -319,8 +251,6 @@ def my_simulator(params):
 		probe_spikes=nengo.Probe(wm.neurons, 'spikes', sample_every=dt_sample) #spike data
 		probe_output=nengo.Probe(output,synapse=None,sample_every=dt_sample) #decision data
 
-
-
 	'''simulation ###############################################'''
 	print 'Running drug \"%s\", trial %s...' %(drug,trial+1)
 	with nengo.Simulator(model,dt=dt) as sim:
@@ -331,77 +261,103 @@ def my_simulator(params):
 		df_firing=firing_dataframe(sim,drug,trial,sim.data[wm],probe_spikes)
 	return [df_primary, df_firing]
 
+def id_generator(size=6):
+	#http://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
+	import string
+	import random
+	return ''.join(random.choice(string.ascii_uppercase+string.digits) for _ in range(size))
 
+def import_params(filename):
+	import pandas as pd
+	the_params=eval(open(filename).read())
+	return the_params
 
-'''multiprocessing ###############################################'''
-print "Experiment: drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials)
-pool = Pool(nodes=n_processes)
-exp_params=[]
-for drug in drugs:
-	for trial in trials:
-		exp_params.append([decision_type, drug_type, drug, trial])
-df_list = pool.map(my_simulator, exp_params)
-primary_dataframe = pd.concat([df_list[i][0] for i in range(len(df_list))], ignore_index=True)
-firing_dataframe = pd.concat([df_list[i][1] for i in range(len(df_list))], ignore_index=True)
-# print primary_dataframe, firing_dataframe
+def generate_cues(misperceive,n_trials,seed=3):
+	import numpy as np
+	trials=np.arange(n_trials)
+	perceived=np.ones(n_trials) #list of correctly perceived (not necessarily remembered) cues
+	rng=np.random.RandomState(seed=seed)
+	cues=2*rng.randint(2,size=n_trials)-1 #whether the cues is on the left or right
+	for n in range(len(perceived)): 
+		if rng.rand()<misperceive: perceived[n]=0
+	return cues,perceived,trials
 
+def main():
+	import matplotlib.pyplot as plt
+	import seaborn as sns
+	import pandas as pd
+	import os
+	from pathos.multiprocessing import ProcessingPool as Pool
+	from pathos.helpers import freeze_support #for Windows
+	# import ipdb
 
+	'''Import Parameters from File'''
+	all_params=import_params('parameters.txt')
+	seed=all_params['seed']
+	n_trials=all_params['seed']
+	n_processes=all_params['seed'] #3*n_trials
+	filename=str(all_params['seed'])
+	drug_type=str(all_params['drug_type'])
+	decision_type=str(all_params['decision_type'])
+	drugs=all_params['drugs']
+	n_trials=all_params['n_trials']
+	cues,perceived,trials=generate_cues(all_params['misperceive'],n_trials,seed)
+	all_params['cues']=cues
+	all_params['perceived']=perceived
 
+	'''Multiprocessing ###############################################'''
+	print "Running Experiment: drug_type=%s, decision_type=%s, trials=%s..." %(drug_type,decision_type,n_trials)
+	freeze_support()
+	pool = Pool(nodes=n_processes)
+	exp_params=[]
+	for drug in drugs:
+		for trial in trials:
+			exp_params.append([decision_type, drug_type, drug, trial, seed, all_params])
+	df_list = pool.map(run, exp_params)
+	primary_dataframe = pd.concat([df_list[i][0] for i in range(len(df_list))], ignore_index=True)
+	firing_dataframe = pd.concat([df_list[i][1] for i in range(len(df_list))], ignore_index=True)
+	# print primary_dataframe, firing_dataframe
 
-'''plot and export ###############################################'''
-#http://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
-def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
+	'''Plot and Export ###############################################'''
+	print 'Exporting Data...'
+	root=os.getcwd()
+	empirical_dataframe=pd.read_pickle('empirical_data.pkl')
+	os.chdir(root+'/data/')
+	addon=str(id_generator(9))
+	fname=filename+'_'+decision_type+'_'+drug_type+'_'+addon
+	primary_dataframe.to_pickle(fname+'_primary_data.pkl')
+	firing_dataframe.to_pickle(fname+'_firing_data.pkl')
+	param_df=pd.DataFrame([all_params])
+	param_df.reset_index().to_json(fname+'_params.json',orient='records')
 
-root=os.getcwd()
-os.chdir(root+'/data/')
-addon=id_generator(9)
-fname=filename+'_'+decision_type+'_'+drug_type+'_'+addon
+	print 'Plotting...'
+	plot_context=all_params['plot_context']
+	sns.set(context=plot_context)
+	figure, (ax1, ax2) = plt.subplots(2, 1)
+	sns.tsplot(time="time",value="wm",data=primary_dataframe,unit="trial",condition='drug',ax=ax1,ci=95)
+	sns.tsplot(time="time",value="correct",data=primary_dataframe,unit="trial",condition='drug',ax=ax2,ci=95)
+	sns.tsplot(time="time",value="accuracy",data=empirical_dataframe,unit='trial',condition='drug',
+				interpolate=False,ax=ax2)
+	ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,10),ylim=(0,1),
+				title="drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials))
+	ax2.set(xlabel='time (s)',xlim=(0,10),ylim=(0,1),ylabel='accuracy')
+	figure.savefig(fname+'_primary_plots.png')
+	# plt.show()
 
-columns=('time','drug','accuracy','trial')
-emp_timesteps = [3.0,5.0,7.0,9.0]
-empirical_dataframe = pd.DataFrame(columns=columns,index=np.arange(0, 12))
-pre_PHE=[0.972, 0.947, 0.913, 0.798]
-pre_GFC=[0.970, 0.942, 0.882, 0.766]
-post_GFC=[0.966, 0.928, 0.906, 0.838]
-post_PHE=[0.972, 0.938, 0.847, 0.666]
-q=0
-for t in range(len(emp_timesteps)):
-	empirical_dataframe.loc[q]=[emp_timesteps[t],'control',np.average([pre_GFC[t],pre_PHE[t]]),0]
-	empirical_dataframe.loc[q+1]=[emp_timesteps[t],'PHE',post_PHE[t],0]
-	empirical_dataframe.loc[q+2]=[emp_timesteps[t],'GFC',post_GFC[t],0]
-	q+=3
+	sns.set(context=plot_context)
+	figure2, (ax3, ax4) = plt.subplots(1, 2)
+	if len(firing_dataframe.query("tuning=='weak'"))>0:
+		sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax3,ci=95,
+				data=firing_dataframe.query("tuning=='weak'").reset_index())
+	if len(firing_dataframe.query("tuning=='nonpreferred'"))>0:
+		sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax4,ci=95,
+				data=firing_dataframe.query("tuning=='nonpreferred'").reset_index())
+	ax3.set(xlabel='time (s)',xlim=(0.0,10.0),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
+	ax4.set(xlabel='time (s)',xlim=(0.0,10.0),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
+	figure2.savefig(fname+'_firing_plots.png')
+	plt.show()
 
-print 'Exporting Data...'
-primary_dataframe.to_pickle(fname+'_primary_data.pkl')
-firing_dataframe.to_pickle(fname+'_firing_data.pkl')
-param_df=pd.DataFrame([params])
-param_df.reset_index().to_json(fname+'_params.json',orient='records')
+	os.chdir(root)
 
-print 'Plotting...'
-sns.set(context=plot_context)
-figure, (ax1, ax2) = plt.subplots(2, 1)
-sns.tsplot(time="time",value="wm",data=primary_dataframe,unit="trial",condition='drug',ax=ax1,ci=95)
-sns.tsplot(time="time",value="correct",data=primary_dataframe,unit="trial",condition='drug',ax=ax2,ci=95)
-sns.tsplot(time="time",value="accuracy",data=empirical_dataframe,unit='trial',condition='drug',
-			interpolate=False,ax=ax2)
-ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,10),ylim=(0,1),
-			title="drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials))
-ax2.set(xlabel='time (s)',xlim=(0,10),ylim=(0,1),ylabel='accuracy')
-figure.savefig(fname+'_primary_plots.png')
-# plt.show()
-
-sns.set(context=plot_context)
-figure2, (ax3, ax4) = plt.subplots(1, 2)
-if len(firing_dataframe.query("tuning=='weak'"))>0:
-	sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax3,ci=95,
-			data=firing_dataframe.query("tuning=='weak'").reset_index())
-if len(firing_dataframe.query("tuning=='nonpreferred'"))>0:
-	sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax4,ci=95,
-			data=firing_dataframe.query("tuning=='nonpreferred'").reset_index())
-ax3.set(xlabel='time (s)',xlim=(0.0,10.0),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
-ax4.set(xlabel='time (s)',xlim=(0.0,10.0),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
-figure2.savefig(fname+'_firing_plots.png')
-plt.show()
-
-os.chdir(root)
+if __name__=='__main__':
+	main()
