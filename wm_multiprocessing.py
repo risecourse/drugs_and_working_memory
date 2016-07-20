@@ -22,30 +22,30 @@ def run(params):
 
 	dt=my_params['dt']
 	dt_sample=my_params['dt_sample']
-	t_stim=my_params['t_stim']
+	t_cue=my_params['t_cue']
 	t_delay=my_params['t_delay']
-	drug_effect_stim=my_params['drug_effect_stim']
+	drug_effect_cue=my_params['drug_effect_cue']
 	drug_effect_multiply=my_params['drug_effect_multiply']
 	drug_effect_gain=my_params['drug_effect_gain']
 	drug_effect_channel=my_params['drug_effect_channel']
-	k_neuron_sensory=my_params['k_neuron_sensory']
+	k_neuron_inputs=my_params['k_neuron_inputs']
 	k_neuron_recur=my_params['k_neuron_recur']
 	enc_min_cutoff=my_params['enc_min_cutoff']
 	enc_max_cutoff=my_params['enc_max_cutoff']
 	sigma_smoothing=my_params['sigma_smoothing']
 	frac=my_params['frac']
-	neurons_sensory=my_params['neurons_sensory']
+	neurons_inputs=my_params['neurons_inputs']
 	neurons_wm=my_params['neurons_wm']
 	neurons_decide=my_params['neurons_decide']
 	ramp_scale=my_params['ramp_scale']
-	stim_scale=my_params['stim_scale']
+	cue_scale=my_params['cue_scale']
 	tau=my_params['tau']
 	tau_wm=my_params['tau_wm']
 	noise_wm=my_params['noise_wm']
 	noise_decision=my_params['noise_decision']
 	perceived=my_params['perceived']
 	cues=my_params['cues']
-	timesteps=np.arange(0,int((t_stim+t_delay)/dt_sample))
+	timesteps=np.arange(0,int((t_cue+t_delay)/dt_sample))
 
 	'''helper functions ###############################################'''
 	rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
@@ -60,21 +60,21 @@ def run(params):
 		def __call__(self,A,Y,rng=None,E=None): #the function that gets called by the builder
 			return self.my_weights.T, dict()
 
-	def stim_function(t):
-		if t < t_stim and perceived[trial]!=0:
-			return stim_scale * cues[trial]
+	def cue_function(t):
+		if t < t_cue and perceived[trial]!=0:
+			return cue_scale * cues[trial]
 		else: return 0
 
 	def ramp_function(t):
 		if drug_type == 'NEURON':
-			return ramp_scale * k_neuron_sensory
-		elif t > t_stim:
+			return ramp_scale * k_neuron_inputs
+		elif t > t_cue:
 			return ramp_scale
 		else: return 0
 
 	def noise_bias_function(t):
 		if drug_type=='addition':
-			return np.random.normal(drug_effect_stim[drug],noise_wm)
+			return np.random.normal(drug_effect_cue[drug],noise_wm)
 		else:
 			return np.random.normal(0.0,noise_wm)
 
@@ -84,9 +84,9 @@ def run(params):
 		elif decision_type == 'BG':
 			return np.random.normal(0.0,noise_decision,size=2)
 
-	def sensory_function(x):
+	def inputs_function(x):
 		if drug_type == 'NEURON':
-			return x * tau_wm * k_neuron_sensory
+			return x * tau_wm * k_neuron_inputs
 		else:
 			return x * tau_wm
 
@@ -109,12 +109,12 @@ def run(params):
 			elif x[0] < x[1]: output = -1.0
 		return output 
 
-	def BG_rescale(x): #rescales -1 to 1 into 0.3 to 1
-		pos_x = 2 * x + 1
+	def BG_rescale(x): #rescales -1 to 1 into 0.3 to 1, makes 2-dimensional
+		pos_x = 0.5 * (x + 1)
 		rescaled = 0.3 + 0.7 * pos_x, 0.3 + 0.7 * (1 - pos_x)
 		return rescaled
 
-	def reset_alpha_bias(model,sim,wm_recurrent,wm_choice,wm_BG,drug):
+	def reset_alpha_bias(model,sim,wm,wm_recurrent,wm_choice,wm_BG,drug):
 		#set gains and biases as a constant multiple of the old values
 		wm.gain = sim.data[wm].gain * drug_effect_gain[drug][0]
 		wm.bias = sim.data[wm].bias * drug_effect_gain[drug][1]
@@ -194,21 +194,21 @@ def run(params):
 
 		#Ensembles
 		#Inputs
-		stim = nengo.Node(output=stim_function)
+		cue = nengo.Node(output=cue_function)
 		ramp = nengo.Node(output=ramp_function)
-		sensory = nengo.Ensemble(neurons_sensory,2)
+		inputs = nengo.Ensemble(neurons_inputs,2)
 		noise_wm_node = nengo.Node(output=noise_bias_function)
 		noise_decision_node = nengo.Node(output=noise_decision_function)
 		#Working Memory
 		if drug_type == 'NEURON':
-			wm = nengo.Ensemble(neurons_wm,2,neuron_type=Bahr2())
+			wm = nengo.Ensemble(neurons_wm,2,neuron_type=Bahr2(),max_rates=Uniform(70,140))
 		else:
 			wm = nengo.Ensemble(neurons_wm,2)
 		#Decision
 		if decision_type=='choice':
 			decision = nengo.Ensemble(neurons_decide,2)
 		elif decision_type=='BG':
-			utilities = nengo.networks.EnsembleArray(neurons_sensory,n_ensembles=2)
+			utilities = nengo.networks.EnsembleArray(neurons_inputs,n_ensembles=2)
 			BG = nengo.networks.BasalGanglia(2,neurons_decide)
 			decision = nengo.networks.EnsembleArray(neurons_decide,n_ensembles=2,
 						intercepts=Uniform(0.2,1),encoders=Uniform(1,1))
@@ -218,16 +218,16 @@ def run(params):
 		output = nengo.Ensemble(neurons_decide,1)
 
 		#Connections
-		nengo.Connection(stim,sensory[0],synapse=None)
-		nengo.Connection(ramp,sensory[1],synapse=None)
+		nengo.Connection(cue,inputs[0],synapse=None)
+		nengo.Connection(ramp,inputs[1],synapse=None)
 		if drug_type == 'NEURON':
-			solver_stim = nengo.solvers.LstsqL2(True)
+			solver_cue = nengo.solvers.LstsqL2(True)
 			solver_wm = nengo.solvers.LstsqL2(True)
-			nengo.Connection(sensory,wm,synapse=ExpSyn(tau_wm),function=sensory_function,solver=solver_stim)
+			nengo.Connection(inputs,wm,synapse=ExpSyn(tau_wm),function=inputs_function,solver=solver_cue)
 			wm_recurrent=nengo.Connection(wm,wm,synapse=ExpSyn(tau_wm),function=wm_recurrent_function,solver=solver_wm)	
 			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)							
 		else:
-			nengo.Connection(sensory,wm,synapse=tau_wm,function=sensory_function)
+			nengo.Connection(inputs,wm,synapse=tau_wm,function=inputs_function)
 			wm_recurrent=nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
 			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)
 		wm_choice,wm_BG=None,None
@@ -240,7 +240,7 @@ def run(params):
 			wm_BG=nengo.Connection(wm[0],utilities.input,synapse=tau,function=BG_rescale)
 			nengo.Connection(utilities.output,BG.input,synapse=None)
 			nengo.Connection(BG.output,decision.input,synapse=tau)
-			# nengo.Connection(noise_decision_node,BG.input,synapse=None) #added external noise?
+			nengo.Connection(noise_decision_node,BG.input,synapse=None) #added external noise?
 			nengo.Connection(bias,decision.input,synapse=tau)
 			nengo.Connection(decision.input,decision.output,transform=(np.eye(2)-1),synapse=tau/2.0)
 			nengo.Connection(decision.output,temp)
@@ -254,9 +254,9 @@ def run(params):
 	'''simulation ###############################################'''
 	print 'Running drug \"%s\", trial %s...' %(drug,trial+1)
 	with nengo.Simulator(model,dt=dt) as sim:
-		if drug_type == 'alpha': sim=reset_alpha_bias(model,sim,wm_recurrent,wm_choice,wm_BG,drug)
+		if drug_type == 'alpha': sim=reset_alpha_bias(model,sim,wm,wm_recurrent,wm_choice,wm_BG,drug)
 		if drug_type == 'NEURON': reset_channels(drug)
-		sim.run(t_stim+t_delay)
+		sim.run(t_cue+t_delay)
 		df_primary=primary_dataframe(sim,drug,trial,probe_wm,probe_output)
 		df_firing=firing_dataframe(sim,drug,trial,sim.data[wm],probe_spikes)
 	return [df_primary, df_firing]
@@ -341,9 +341,9 @@ def main():
 	sns.tsplot(time="time",value="correct",data=primary_dataframe,unit="trial",condition='drug',ax=ax2,ci=95)
 	sns.tsplot(time="time",value="accuracy",data=empirical_dataframe,unit='trial',condition='drug',
 				interpolate=False,ax=ax2)
-	ax1.set(xlabel='',ylabel='abs(WM value)',xlim=(0,9.5),ylim=(0,1),
+	ax1.set(xlabel='',ylabel='decoded $\hat{cue}$',xlim=(0,9.5),ylim=(0,1),
 				title="drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials))
-	ax2.set(xlabel='time (s)',xlim=(0,9.5),ylim=(0.5,1),ylabel='accuracy')
+	ax2.set(xlabel='time (s)',xlim=(0,9.5),ylim=(0.5,1),ylabel='DRT accuracy')
 	figure.savefig(fname+'_primary_plots.png')
 	# plt.show()
 

@@ -19,17 +19,18 @@ def run(exp_params):
     drug=exp_params[0]
     trial=exp_params[1]
     seed=exp_params[2]
+    t_stim=1
+    t_delay=1
     dt=0.001
-    t_delay= 0.1
-    t_stim=0.1
+    dt_sample=0.005
     tau = 0.1
-    noise_B=0.005
     ramp_scale=0.42
     num_A_neurons = 100
-    num_LIF_neurons = 1000
-    num_nrn_neurons = 1000
+    num_LIF_neurons = 100
+    num_nrn_neurons = 200
     num_C_neurons = 100
-    dt_sample=0.005
+    noise_B=0.005
+    k_neuron=2.3
     timesteps=np.arange(0,int((t_stim+t_delay)/dt_sample))
 
     def primary_dataframe(sim,drug,trial,stim_probe,B_LIF_probe,B_nrn_probe,C_LIF_probe,C_nrn_probe):
@@ -50,15 +51,21 @@ def run(exp_params):
             i+=1
         return df_primary
 
+    def reset_channels(drug):
+        for cell in nengo_detailed_neurons.builder.ens_to_cells[B_nrn]:
+            cell.neuron.tuft.gbar_ih *= drug_effect_channel[drug]
+            cell.neuron.apical.gbar_ih *= drug_effect_channel[drug]
+            cell.neuron.recalculate_channel_densities()
+
     with nengo.Network(seed=seed+trial) as model:
         stim = nengo.Node(lambda t: 1.0*(t<t_stim))
         ramp = nengo.Node(lambda t: 0.4*(t>t_stim))
-        noise = nengo.Node(output=np.random.normal(drug_effect_stim[drug],noise_B))
+        # noise = nengo.Node(output=np.random.normal(drug_effect_stim[drug],noise_B))
 
         # Ensembles
         A = nengo.Ensemble(num_A_neurons, dimensions=2)
-        B_LIF = nengo.Ensemble(num_LIF_neurons, dimensions=2)
-        B_nrn = nengo.Ensemble(num_nrn_neurons, dimensions=2, neuron_type=Bahr2())
+        B_LIF = nengo.Ensemble(num_LIF_neurons, dimensions=2, max_rates=Uniform(200,400))
+        B_nrn = nengo.Ensemble(num_nrn_neurons, dimensions=2, neuron_type=Bahr2(),max_rates=Uniform(80,120))
         C_LIF = nengo.Ensemble(num_C_neurons, dimensions=1)
         C_nrn = nengo.Ensemble(num_C_neurons, dimensions=1)
 
@@ -67,29 +74,24 @@ def run(exp_params):
         nengo.Connection(ramp, A[1])
         solver = nengo.solvers.LstsqL2(True)
         solver2 = nengo.solvers.LstsqL2(True)
-        nengo.Connection(A, B_LIF, synapse=tau, transform=tau) #transform=tau for wm
-        nengo.Connection(A, B_nrn, solver=solver, synapse=ExpSyn(tau), transform=tau) #transform=tau for wm
+        nengo.Connection(A, B_LIF, synapse=tau, transform=tau)
+        nengo.Connection(A, B_nrn, solver=solver, synapse=ExpSyn(tau), transform=tau)
+        '''UNCOMMENT FOR INTEGRATOR'''
         nengo.Connection(B_LIF, B_LIF, synapse=tau)
-        nengo.Connection(B_nrn, B_nrn, solver=solver2, synapse=ExpSyn(tau))
+        nengo.Connection(B_nrn, B_nrn, solver=solver2, synapse=ExpSyn(tau),transform=k_neuron)
+
         # nengo.Connection(noise,B_LIF.neurons,synapse=tau,transform=np.ones((num_B_neurons,1))*tau)
         # nengo.Connection(noise,B_nrn.neurons,synapse=tau,transform=np.ones((num_B_neurons,1))*tau)
         conn = nengo.Connection(B_LIF[0], C_LIF)
         conn = nengo.Connection(B_nrn[0], C_nrn)
 
         # Probes
-        stim_probe = nengo.Probe(A, synapse=.01)
+        stim_probe = nengo.Probe(A, synapse=.01, sample_every=dt_sample)
         B_LIF_probe = nengo.Probe(B_LIF, synapse=.01, sample_every=dt_sample)
         B_nrn_probe = nengo.Probe(B_nrn, synapse=.01, sample_every=dt_sample)
-        C_LIF_probe = nengo.Probe(C_LIF, synapse=.01)
-        C_nrn_probe = nengo.Probe(C_nrn, synapse=.01)
+        C_LIF_probe = nengo.Probe(C_LIF, synapse=.01, sample_every=dt_sample)
+        C_nrn_probe = nengo.Probe(C_nrn, synapse=.01, sample_every=dt_sample)
 
-    # sim = nengo.Simulator(model)
-    def reset_channels(drug):
-        #strongly enhance the I_h current, by opening HCN channels, to create shunting under control
-        for cell in nengo_detailed_neurons.builder.ens_to_cells[B_nrn]:
-            cell.neuron.tuft.gbar_ih *= drug_effect_channel[drug]
-            cell.neuron.apical.gbar_ih *= drug_effect_channel[drug]
-            cell.neuron.recalculate_channel_densities()
 
     print 'Running drug %s trial %s...' %(drug,trial+1)
     with nengo.Simulator(model,dt=dt) as sim:
@@ -107,19 +109,20 @@ def id_generator(size=6):
 
 
 
-drugs=['control','PHE','GFC']
+drugs=['control'] #['control','PHE','GFC']
 seed=3
-n_trials=4
-n_processes=20
+n_trials=5
+n_processes=5
 trials=np.arange(n_trials)
 pool = Pool2(nodes=n_processes)
 exp_params=[]
 for drug in drugs:
     for trial in trials:
         exp_params.append([drug, trial, seed])
-df_list = pool.map(run, exp_params)
-primary_dataframe = pd.concat([df_list[i] for i in range(len(df_list))], ignore_index=True)
 
+df_list = pool.map(run, exp_params)
+primary_dataframe = pd.concat([df for df in df_list], ignore_index=True)
+# print primary_dataframe
 
 print 'Plotting...'
 root=os.getcwd()
@@ -139,9 +142,9 @@ sns.tsplot(time="time",value="b_nrn_ramp",data=primary_dataframe,unit="trial",co
 sns.tsplot(time="time",value="c_lif",data=primary_dataframe,unit="trial",condition='drug',ax=ax4,ci=95)
 sns.tsplot(time="time",value="c_nrn",data=primary_dataframe,unit="trial",condition='drug',ax=ax5,ci=95)
 # ax1.set(xlabel='')
-ax2.set(xlabel='',ylabel='LIF WM',ylim=(0,0.2))
-ax3.set(xlabel='',ylabel='NEURON WM',ylim=(0,0.2))
-ax4.set(xlabel='',ylabel='LIF output',ylim=(0,0.1))
-ax5.set(xlabel='time (s)',ylabel='NEURON output',ylim=(0,0.1))
+ax2.set(xlabel='',ylabel='LIF WM',ylim=(0,1.0))
+ax3.set(xlabel='',ylabel='NEURON WM',ylim=(0,1.0))
+ax4.set(xlabel='',ylabel='LIF output',ylim=(0,1.0))
+ax5.set(xlabel='time (s)',ylabel='NEURON output',ylim=(0,1.0))
 figure.savefig(fname)
 plt.show()
