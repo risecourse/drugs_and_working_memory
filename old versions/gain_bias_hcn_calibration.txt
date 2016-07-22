@@ -1,0 +1,10 @@
+Alpha / bias
+Calibration points left
+b=-62.23 +/- 0.23
+m=0.0846 +/- 0.0026
+Calibration points right
+b=-72.67 +/- 0.26
+m=0.1277 +/- 0.0029
+Differences
+72.67/62.23=1.17
+0.1277/0.0846=1.51

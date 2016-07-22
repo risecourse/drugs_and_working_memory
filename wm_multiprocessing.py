@@ -25,11 +25,10 @@ def run(params):
 	t_cue=my_params['t_cue']
 	t_delay=my_params['t_delay']
 	drug_effect_cue=my_params['drug_effect_cue']
-	drug_effect_multiply=my_params['drug_effect_multiply']
-	drug_effect_gain=my_params['drug_effect_gain']
+	drug_effect_inhibit=my_params['drug_effect_inhibit']
+	drug_effect_recurrent=my_params['drug_effect_recurrent']
+	drug_effect_gainbias=my_params['drug_effect_gainbias']
 	drug_effect_channel=my_params['drug_effect_channel']
-	k_neuron_inputs=my_params['k_neuron_inputs']
-	k_neuron_recur=my_params['k_neuron_recur']
 	enc_min_cutoff=my_params['enc_min_cutoff']
 	enc_max_cutoff=my_params['enc_max_cutoff']
 	sigma_smoothing=my_params['sigma_smoothing']
@@ -48,32 +47,22 @@ def run(params):
 	timesteps=np.arange(0,int((t_cue+t_delay)/dt_sample))
 
 	'''helper functions ###############################################'''
-	rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
-
-	class MySolver(nengo.solvers.Solver):
-		#When the simulator builds the network, it looks for a solver to calculate the decoders
-		#instead of the normal least-squares solver, we define our own, so that we can return
-		#the old decoders
-		def __init__(self,weights): #feed in old decoders
-			self.weights=False #they are not weights but decoders
-			self.my_weights=weights
-		def __call__(self,A,Y,rng=None,E=None): #the function that gets called by the builder
-			return self.my_weights.T, dict()
-
+	'''stimuli and transforms'''
 	def cue_function(t):
 		if t < t_cue and perceived[trial]!=0:
 			return cue_scale * cues[trial]
 		else: return 0
 
 	def ramp_function(t):
-		if drug_type == 'NEURON':
-			return ramp_scale * k_neuron_inputs
-		elif t > t_cue:
+		if t > t_cue:
 			return ramp_scale
 		else: return 0
 
+	def inhibit_function(t):
+		return drug_effect_inhibit[drug]
+
 	def noise_bias_function(t):
-		if drug_type=='addition':
+		if drug_type=='additive':
 			return np.random.normal(drug_effect_cue[drug],noise_wm)
 		else:
 			return np.random.normal(0.0,noise_wm)
@@ -85,16 +74,11 @@ def run(params):
 			return np.random.normal(0.0,noise_decision,size=2)
 
 	def inputs_function(x):
-		if drug_type == 'NEURON':
-			return x * tau_wm * k_neuron_inputs
-		else:
-			return x * tau_wm
+		return x * tau_wm
 
 	def wm_recurrent_function(x):
-		if drug_type == 'multiply':
-			return x * drug_effect_multiply[drug]
-		elif drug_type=='NEURON':
-			return x * k_neuron_recur
+		if drug_type == 'recurrent':
+			return x * drug_effect_recurrent[drug]
 		else:
 			return x
 
@@ -114,19 +98,70 @@ def run(params):
 		rescaled = 0.3 + 0.7 * pos_x, 0.3 + 0.7 * (1 - pos_x)
 		return rescaled
 
-	def reset_alpha_bias(model,sim,wm,wm_recurrent,wm_choice,wm_BG,drug):
+	'''drug approximations'''
+	if drug_type == 'gainbias': rc.set("decoder_cache", "enabled", "False") #don't try to remember old decoders
+	else: rc.set("decoder_cache", "enabled", "True")
+	class MySolver(nengo.solvers.Solver):
+		#When the simulator builds the network, it looks for a solver to calculate the decoders
+		#instead of the normal least-squares solver, we define our own, so that we can return
+		#the old decoders
+		def __init__(self,weights): #feed in old decoders
+			self.weights=False #they are not weights but decoders
+			self.my_weights=weights
+		def __call__(self,A,Y,rng=None,E=None): #the function that gets called by the builder
+			return self.my_weights.T, dict()
+
+	#https://github.com/nengo/nengo/issues/921 - Thanks Terry!
+	def parisien_transform(conn, inh_synapse, inh_proportion=0.25): 
+	    # only works for ens->ens connections
+	    assert isinstance(conn.pre_obj, nengo.Ensemble)
+	    assert isinstance(conn.post_obj, nengo.Ensemble)    
+
+	    # make sure the pre and post ensembles have seeds so we can guarantee their params
+	    if conn.pre_obj.seed is None: conn.pre_obj.seed = np.random.randint(0x7FFFFFFF)
+	    if conn.post_obj.seed is None: conn.post_obj.seed = np.random.randint(0x7FFFFFFF)
+
+	    # compute the encoders, decoders, and tuning curves
+	    model2 = nengo.Network(add_to_container=False)
+	    model2.ensembles.append(conn.pre_obj)
+	    model2.ensembles.append(conn.post_obj)
+	    model2.connections.append(conn)
+	    sim = nengo.Simulator(model2)
+	    enc = sim.data[conn.post_obj].encoders
+	    dec = sim.data[conn].weights
+	    eval_points = sim.data[conn].eval_points
+	    pts, act = nengo.utils.ensemble.tuning_curves(conn.pre_obj, sim, inputs=eval_points)
+
+	    # compute the original weights
+	    transform = nengo.utils.builder.full_transform(conn)
+	    w = np.dot(enc, np.dot(transform, dec))
+
+	    # compute the bias function, bias encoders, bias decoders, and bias weights
+	    total = np.sum(act, axis=1)    
+	    bias_d = np.ones(conn.pre_obj.n_neurons) / np.max(total)    
+	    bias_func = total / np.max(total)    
+	    bias_e = np.max(-w / bias_d, axis=1)
+	    bias_w = np.outer(bias_e, bias_d)
+
+	    # add the new model compontents
+	    nengo.Connection(conn.pre_obj.neurons, conn.post_obj.neurons, transform=bias_w, synapse=conn.synapse)
+	    inh = nengo.Ensemble(n_neurons=int(conn.pre_obj.n_neurons*inh_proportion), radius=conn.pre_obj.radius,
+	                    dimensions=1, encoders=nengo.dists.Choice([[1]]))
+	    nengo.Connection(conn.pre_obj, inh, solver=nengo.solvers.NnlsL2(),transform=1,
+	                    synapse=inh_synapse,**nengo.utils.connection.target_function(pts, bias_func))
+	    nengo.Connection(inh, conn.post_obj.neurons, solver=nengo.solvers.NnlsL2(), transform=-bias_e[:,None])
+
+	    return inh #return the inhibitory ensemble for assignment in model		
+
+	def reset_gainbias_bias(model,sim,wm,wm_recurrent,wm_to_decision,drug):
 		#set gains and biases as a constant multiple of the old values
-		wm.gain = sim.data[wm].gain * drug_effect_gain[drug][0]
-		wm.bias = sim.data[wm].bias * drug_effect_gain[drug][1]
+		wm.gain = sim.data[wm].gain * drug_effect_gainbias[drug][0]
+		wm.bias = sim.data[wm].bias * drug_effect_gainbias[drug][1]
 		#set the solver of each of the connections coming out of wm using the custom MySolver class
 		#with input equal to the old decoders. We use the old decoders because we don't want the builder
-		#to optimize the decoders to the new alpha/bias values, otherwise it would "adapt" to the drug
+		#to optimize the decoders to the new gainbias/bias values, otherwise it would "adapt" to the drug
 		wm_recurrent.solver = MySolver(sim.model.params[wm_recurrent].weights)
-		if wm_choice is not None:
-			wm_choice.solver = MySolver(sim.model.params[wm_choice].weights)
-		if wm_BG is not None:
-			#weights[0]=weights[1] for connection from wm to utilities (EnsembleArray.input with n_ens=2)
-			wm_BG.solver = MySolver(sim.model.params[wm_BG].weights[0]) 
+		wm_to_decision.solver=MySolver(sim.model.params[wm_to_decision].weights)
 		#rebuild the network to affect the gain/bias change	
 		sim=nengo.Simulator(model,dt=dt)
 		return sim
@@ -138,8 +173,7 @@ def run(params):
 		    cell.neuron.apical.gbar_ih *= drug_effect_channel[drug]
 		    cell.neuron.recalculate_channel_densities()
 
-	'''dataframe initialization ###############################################'''
-
+	'''dataframe initialization'''
 	def primary_dataframe(sim,drug,trial,probe_wm,probe_output):
 		columns=('time','drug','wm','output','correct','trial') 
 		df_primary = pd.DataFrame(columns=columns, index=np.arange(0,len(timesteps)))
@@ -225,19 +259,25 @@ def run(params):
 			solver_wm = nengo.solvers.LstsqL2(True)
 			nengo.Connection(inputs,wm,synapse=ExpSyn(tau_wm),function=inputs_function,solver=solver_cue)
 			wm_recurrent=nengo.Connection(wm,wm,synapse=ExpSyn(tau_wm),function=wm_recurrent_function,solver=solver_wm)	
-			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)							
+			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)
+		elif drug_type == 'inhibit':
+			nengo.Connection(inputs,wm,synapse=tau_wm,function=inputs_function)
+			wm_recurrent=nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
+			'''uncomment for parisien transform'''
+			# wm_inhibit=parisien_transform(wm_recurrent, inh_synapse=tau_wm)
+			# stim_inhibit=nengo.Node(output=inhibit_function)
+			# nengo.Connection(stim_inhibit,wm_inhibit,synapse=tau_wm)
+			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)						
 		else:
 			nengo.Connection(inputs,wm,synapse=tau_wm,function=inputs_function)
 			wm_recurrent=nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
 			nengo.Connection(noise_wm_node,wm.neurons,synapse=tau_wm,transform=np.ones((neurons_wm,1))*tau_wm)
-		wm_choice,wm_BG=None,None
 		if decision_type=='choice':	
-			wm_choice=nengo.Connection(wm[0],decision[0],synapse=tau) #no ramp information passed
+			wm_to_decision=nengo.Connection(wm[0],decision[0],synapse=tau)
 			nengo.Connection(noise_decision_node,decision[1],synapse=None)
 			nengo.Connection(decision,output,function=decision_function)
 		elif decision_type=='BG':
-			# wm_BG=nengo.Connection(wm[0],utilities.input,synapse=tau,transform=[[1],[-1]])
-			wm_BG=nengo.Connection(wm[0],utilities.input,synapse=tau,function=BG_rescale)
+			wm_to_decision=nengo.Connection(wm[0],utilities.input,synapse=tau,function=BG_rescale)
 			nengo.Connection(utilities.output,BG.input,synapse=None)
 			nengo.Connection(BG.output,decision.input,synapse=tau)
 			nengo.Connection(noise_decision_node,BG.input,synapse=None) #added external noise?
@@ -247,20 +287,22 @@ def run(params):
 			nengo.Connection(temp,output,function=decision_function)
 
 		#Probes
-		probe_wm=nengo.Probe(wm[0],synapse=0.01,sample_every=dt_sample) #no ramp information collected
-		probe_spikes=nengo.Probe(wm.neurons, 'spikes', sample_every=dt_sample) #spike data
-		probe_output=nengo.Probe(output,synapse=None,sample_every=dt_sample) #decision data
+		probe_wm=nengo.Probe(wm[0],synapse=0.01,sample_every=dt_sample)
+		probe_spikes=nengo.Probe(wm.neurons, 'spikes', sample_every=dt_sample)
+		probe_output=nengo.Probe(output,synapse=None,sample_every=dt_sample)
 
 	'''simulation ###############################################'''
 	print 'Running drug \"%s\", trial %s...' %(drug,trial+1)
 	with nengo.Simulator(model,dt=dt) as sim:
-		if drug_type == 'alpha': sim=reset_alpha_bias(model,sim,wm,wm_recurrent,wm_choice,wm_BG,drug)
+		if drug_type == 'gainbias': sim=reset_gainbias_bias(model,sim,wm,wm_recurrent,wm_to_decision,drug)
 		if drug_type == 'NEURON': reset_channels(drug)
 		sim.run(t_cue+t_delay)
 		df_primary=primary_dataframe(sim,drug,trial,probe_wm,probe_output)
 		df_firing=firing_dataframe(sim,drug,trial,sim.data[wm],probe_spikes)
 	return [df_primary, df_firing]
 
+
+'''random helper functions'''
 def id_generator(size=6):
 	#http://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
 	import string
@@ -316,6 +358,7 @@ def main():
 	for drug in drugs:
 		for trial in trials:
 			exp_params.append([decision_type, drug_type, drug, trial, seed, all_params])
+	# df_list=[run(exp_params[0]),run(exp_params[-1])] #for debugging, since poo.map has unhelpful error messages
 	df_list = pool.map(run, exp_params)
 	primary_dataframe = pd.concat([df_list[i][0] for i in range(len(df_list))], ignore_index=True)
 	firing_dataframe = pd.concat([df_list[i][1] for i in range(len(df_list))], ignore_index=True)
