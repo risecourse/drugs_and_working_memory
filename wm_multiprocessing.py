@@ -7,9 +7,9 @@ def run(params):
 	import nengo
 	from nengo.dists import Choice,Exponential,Uniform
 	from nengo.rc import rc
-	import nengo_detailed_neurons
-	from nengo_detailed_neurons.neurons import Bahr2, IntFire1
-	from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
+	# import nengo_detailed_neurons
+	# from nengo_detailed_neurons.neurons import Bahr2, IntFire1
+	# from nengo_detailed_neurons.synapses import ExpSyn, FixedCurrent
 	import numpy as np
 	import pandas as pd
 
@@ -24,7 +24,7 @@ def run(params):
 	dt_sample=my_params['dt_sample']
 	t_cue=my_params['t_cue']
 	t_delay=my_params['t_delay']
-	drug_effect_cue=my_params['drug_effect_cue']
+	drug_effect_inject=my_params['drug_effect_inject']
 	drug_effect_inhibit=my_params['drug_effect_inhibit']
 	drug_effect_recurrent=my_params['drug_effect_recurrent']
 	drug_effect_gainbias=my_params['drug_effect_gainbias']
@@ -62,8 +62,8 @@ def run(params):
 		return drug_effect_inhibit[drug]
 
 	def noise_bias_function(t):
-		if drug_type=='additive':
-			return np.random.normal(drug_effect_cue[drug],noise_wm)
+		if drug_type=='inject':
+			return np.random.normal(drug_effect_inject[drug],noise_wm)
 		else:
 			return np.random.normal(0.0,noise_wm)
 
@@ -263,7 +263,7 @@ def run(params):
 		elif drug_type == 'inhibit':
 			nengo.Connection(inputs,wm,synapse=tau_wm,function=inputs_function)
 			wm_recurrent=nengo.Connection(wm,wm,synapse=tau_wm,function=wm_recurrent_function)
-			'''uncomment for parisien transform'''
+			'''uncomment for parisien transform, currently broken'''
 			# wm_inhibit=parisien_transform(wm_recurrent, inh_synapse=tau_wm)
 			# stim_inhibit=nengo.Node(output=inhibit_function)
 			# nengo.Connection(stim_inhibit,wm_inhibit,synapse=tau_wm)
@@ -390,17 +390,17 @@ def main():
 	figure.savefig(fname+'_primary_plots.png')
 	# plt.show()
 
-	sns.set(context=plot_context)
-	figure2, (ax3, ax4) = plt.subplots(1, 2)
-	if len(firing_dataframe.query("tuning=='weak'"))>0:
-		sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax3,ci=95,
-				data=firing_dataframe.query("tuning=='weak'").reset_index())
-	if len(firing_dataframe.query("tuning=='nonpreferred'"))>0:
-		sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax4,ci=95,
-				data=firing_dataframe.query("tuning=='nonpreferred'").reset_index())
-	ax3.set(xlabel='time (s)',xlim=(0.0,9.5),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
-	ax4.set(xlabel='time (s)',xlim=(0.0,9.5),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
-	figure2.savefig(fname+'_firing_plots.png')
+	# sns.set(context=plot_context)
+	# figure2, (ax3, ax4) = plt.subplots(1, 2)
+	# if len(firing_dataframe.query("tuning=='weak'"))>0:
+	# 	sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax3,ci=95,
+	# 			data=firing_dataframe.query("tuning=='weak'").reset_index())
+	# if len(firing_dataframe.query("tuning=='nonpreferred'"))>0:
+	# 	sns.tsplot(time="time",value="firing_rate",unit="neuron-trial",condition='drug',ax=ax4,ci=95,
+	# 			data=firing_dataframe.query("tuning=='nonpreferred'").reset_index())
+	# ax3.set(xlabel='time (s)',xlim=(0.0,9.5),ylim=(0,250),ylabel='Normalized Firing Rate',title='Preferred Direction')
+	# ax4.set(xlabel='time (s)',xlim=(0.0,9.5),ylim=(0,250),ylabel='',title='Nonpreferred Direction')
+	# figure2.savefig(fname+'_firing_plots.png')
 	plt.show()
 
 	os.chdir(root)
