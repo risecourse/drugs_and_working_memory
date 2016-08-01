@@ -95,7 +95,7 @@ def run(params):
 
 	def BG_rescale(x): #rescales -1 to 1 into 0.3 to 1, makes 2-dimensional
 		pos_x = 0.5 * (x + 1)
-		rescaled = 0.3 + 0.7 * pos_x, 0.3 + 0.7 * (1 - pos_x)
+		rescaled = 0.4 + 0.6 * pos_x, 0.4 + 0.6 * (1 - pos_x)
 		return rescaled
 
 	'''drug approximations'''
@@ -367,7 +367,7 @@ def main():
 	'''Plot and Export ###############################################'''
 	print 'Exporting Data...'
 	root=os.getcwd()
-	empirical_dataframe=pd.read_pickle('empirical_data') #add '.pkl' onto filename for windows
+	empirical_dataframe=pd.read_pickle('empirical_data_start3s') #add '.pkl' onto filename for windows
 	os.chdir(root+'/data/')
 	addon=str(id_generator(9))
 	fname=filename+'_'+decision_type+'_'+drug_type+'_'+addon
@@ -383,7 +383,9 @@ def main():
 	sns.tsplot(time="time",value="wm",data=primary_dataframe,unit="trial",condition='drug',ax=ax1,ci=95)
 	sns.tsplot(time="time",value="correct",data=primary_dataframe,unit="trial",condition='drug',ax=ax2,ci=95)
 	sns.tsplot(time="time",value="accuracy",data=empirical_dataframe,unit='trial',condition='drug',
-				interpolate=False,ax=ax2)
+				interpolate=False,ax=ax2,color=sns.color_palette('dark'))
+	sns.tsplot(time="time",value="accuracy",data=empirical_dataframe, unit='trial',condition='drug',
+				interpolate=True,ax=ax2,color=sns.color_palette('dark'),legend=False)
 	ax1.set(xlabel='',ylabel='decoded $\hat{cue}$',xlim=(0,9.5),ylim=(0,1),
 				title="drug_type=%s, decision_type=%s, trials=%s" %(drug_type,decision_type,n_trials))
 	ax2.set(xlabel='time (s)',xlim=(0,9.5),ylim=(0.5,1),ylabel='DRT accuracy')

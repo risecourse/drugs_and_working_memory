@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 columns=('time','drug','accuracy','trial')
-emp_timesteps = [2.0,4.0,6.0,8.0]
+emp_timesteps = [3.0,5.0,7.0,9.0]
 empirical_dataframe = pd.DataFrame(columns=columns,index=np.arange(0, 12))
 pre_PHE=[0.972, 0.947, 0.913, 0.798]
 pre_GFC=[0.970, 0.942, 0.882, 0.766]
@@ -14,4 +14,4 @@ for t in range(len(emp_timesteps)):
 	empirical_dataframe.loc[q+1]=[emp_timesteps[t],'PHE (empirical)',post_PHE[t],0]
 	empirical_dataframe.loc[q+2]=[emp_timesteps[t],'GFC (empirical)',post_GFC[t],0]
 	q+=3
-empirical_dataframe.to_pickle('empirical_data_start2s')
+empirical_dataframe.to_pickle('empirical_data_start3s')
