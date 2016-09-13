@@ -3,7 +3,7 @@
 'n_trials':1000,
 'n_processes':10, #3*n_trials for NEURON
 'decision_type':'BG', #decision procedure: 'choice', 'BG'
-'drug_type':'inject', #how to simulate the drugs: 'inject','inhibit','recurrent','gainbias','NEURON',
+'drug_type':'gainbias', #how to simulate the drugs: 'inject','inhibit','recurrent','gainbias','NEURON',
 
 'filename':'wm_mp',
 'dt':0.001, #timestep
