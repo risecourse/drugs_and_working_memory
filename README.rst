@@ -1,4 +1,5 @@
 Peter Duggins, Terry Stewart, Xuan Choo, Chris Eliasmith
+
 Effects of Guanfacine and Phenylephrine on a Spiking Neuron Model of Working Memory
 
 Install
