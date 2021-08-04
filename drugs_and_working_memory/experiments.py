@@ -59,7 +59,7 @@ plot_dir = 'pytry_data/biophysical_july26/'
 # for drug in drugs:
 # 	data_dir = plot_dir + drug
 # 	for a, seed in enumerate(seeds):
-# 		print 'running drug %s, trial=%s...' %(drug, seed)
+# 		print( 'running drug %s, trial=%s...' %(drug, seed))
 # 		trial.Trial().run(
 # 			seed=seed,
 # 			cue=cues[a],
@@ -103,7 +103,7 @@ for d, drug in enumerate(drugs):
 	data = pytry.read(data_dir)
 	for s, seed in enumerate(seeds):
 		df_time_list = []
-		print 'adding drug %s, trial=%s to DRT dataframe...' %(drug, seed)
+		print( 'adding drug %s, trial=%s to DRT dataframe...' %(drug, seed))
 		for t, time in enumerate(times):
 			time = data[s]['time'][t]
 			cue = data[s]['cue']
@@ -119,7 +119,7 @@ for d, drug in enumerate(drugs):
 		df = pandas.concat([df, df_seed], ignore_index=True)
 		del df_time_list
 
-print 'Plotting DRT...'
+print( 'Plotting DRT...')
 """ DRT accuracy plot """
 fig1, (ax1, ax2) = plt.subplots(2,1, sharex=True)
 sns.tsplot(time='time', value='wm', unit='seed', condition='drug',
@@ -151,7 +151,7 @@ for d, drug in enumerate(drugs):
 	data = pytry.read(data_dir)
 	for s, seed in enumerate(seeds):
 		df_time_list = []
-		print 'adding drug %s, trial=%s to firing rate dataframe...' %(drug, seed)
+		print( 'adding drug %s, trial=%s to firing rate dataframe...' %(drug, seed))
 		rates = lpf.filt(data[s]['spikes'])
 		for t, time in enumerate(times):
 			for n in range(n_neurons_wm):
@@ -182,7 +182,7 @@ df_moderate = pandas.DataFrame(df_firing.query("tuning=='moderate'")).reset_inde
 df_nonpreferred = pandas.DataFrame(df_firing.query("tuning=='nonpreferred'")).reset_index()
 
 """ Firing rate plot """
-print 'Plotting Firing Rate...'
+print( 'Plotting Firing Rate...')
 fig2, (ax3, ax4) = plt.subplots(1,2, sharey=True)
 sns.tsplot(time='time', value='rate', unit='neuron-trial', condition='drug',
 	data=df_moderate, ax=ax3, ci=95)  # .reset_index()

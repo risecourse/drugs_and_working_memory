@@ -183,7 +183,7 @@ def firing_dataframe(sim,drug,trial,sim_WM,probe_spikes):
 			rt=t*dt_sample
 			df_firing.loc[j]=[rt,drug,nrn+trial*neurons_WM,tuning,firing_rate[t]]
 			j+=1
-		# print 'appending dataframe for neuron %s' %f
+		# print( 'appending dataframe for neuron %s' %f)
 	return df_firing
 
 def get_correct(Cue,Output_val):

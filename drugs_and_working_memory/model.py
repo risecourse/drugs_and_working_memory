@@ -144,7 +144,7 @@ def run(params):
 
 
 	'''SIMULATION'''
-	print 'Running drug \"%s\", trial %s...' %(drug,trial+1)
+	print( 'Running drug \"%s\", trial %s...' %(drug,trial+1))
 	with nengo.Simulator(model,dt=dt) as sim:
 		if drug_type == 'biophysical': sim=reset_gain_bias(
 				P,model,sim,wm,wm_recurrent,wm_to_decision,drug)
@@ -180,7 +180,7 @@ def main():
 	P['perceived']=perceived
 
 	'''Multiprocessing'''
-	print "drug_type=%s, decision_type=%s, trials=%s..." %(drug_type,decision_type,n_trials)
+	print( "drug_type=%s, decision_type=%s, trials=%s..." %(drug_type,decision_type,n_trials))
 	freeze_support()
 	pool = Pool(nodes=n_processes)
 	exp_params=[]
@@ -193,14 +193,14 @@ def main():
 	firing_dataframe = pd.concat([df_list[i][1] for i in range(len(df_list))], ignore_index=True)
 
 	'''Plot and Export'''
-	print 'Exporting Data...'
+	print( 'Exporting Data...')
 	datadir=ch_dir()
 	primary_dataframe.to_pickle('primary_data.pkl')
 	firing_dataframe.to_pickle('firing_data.pkl')
 	param_df=pd.DataFrame([P])
 	param_df.reset_index().to_json('params.json',orient='records')
 
-	print 'Plotting...'
+	print( 'Plotting...')
 	emp_dataframe=empirical_dataframe()
 	sns.set(context='poster')
 	figure, (ax1, ax2) = plt.subplots(2, 1)

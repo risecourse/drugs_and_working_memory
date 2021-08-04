@@ -265,7 +265,7 @@ class Trial(pytry.NengoTrial):
 				sample_every=p.dt_sample)
 
 		if p.neuron_type == 'Bioneuron':
-			print 'Training decoders for recurrent and decision connection...'
+			print( 'Training decoders for recurrent and decision connection...')
 
 			transform_train = 1.0
 			transform_test = 1.0
@@ -370,7 +370,7 @@ class Trial(pytry.NengoTrial):
 				# nrn.cell.soma(0.5).gbar_nat *= p.drug_biophysical
 			neuron.init()
 
-		print 'Running Trial...'
+		print( 'Running Trial...')
 		sim.run(p.t_cue+p.t_delay)
 
 		if p.neuron_type == 'LIF':
